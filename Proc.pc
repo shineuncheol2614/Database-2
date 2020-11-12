@@ -1,0 +1,505 @@
+// win32 Visual C 컴파일시 추가
+// 프로그램 가장 첫 줄에 추가할 것
+#define _CRT_SECURE_NO_WARNINGS
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+#include <conio.h>
+#include <time.h>
+
+/* for oracle */
+#include <sqlda.h>
+#include <sqlca.h>
+#include <sqlcpr.h>
+
+void DB_connect();
+void sql_error(char *msg);
+void player_view();
+void print();
+void update_match();
+void goal_rank();
+void player_time();
+void injury_print();
+void injury_delete();
+void injury();
+void treatment_print();
+void match();
+void match_result_view();
+void match_view();
+
+int match_count = 0;
+
+EXEC SQL BEGIN DECLARE SECTION;
+   VARCHAR uid[80];
+   VARCHAR pwd[20];
+EXEC SQL END DECLARE SECTION;
+
+#define getch()  _getch()
+
+void main() {
+   DB_connect();
+   getch();
+   int s;
+   while(1){
+      print();
+      scanf("\t\t%d", &s);
+      switch (s){
+      case 1:
+         printf("\t\t===============================선수단 조회===============================\n\n");
+         player_view();
+         break;
+      case 2:
+         printf("\t\t=================================경기 진행================================\n\n");
+       update_match();
+         break;
+      case 3:
+         printf("\t\t================================이달의 선수===============================\n\n");
+         goal_rank();
+         break;
+     case 4:
+       printf("\t\t==============================잔여 계약 조회=============================\n\n");
+       player_time();
+       break;
+      case 5:
+         printf("\t\t=================================치료 목록================================\n\n");
+       treatment_print();
+       break;
+      case 6:
+         printf("\t\t==============================경기 결과 조회=============================\n\n");
+         match_view();
+       break;
+     case 7:
+       printf("\t\t================================종료합니다===============================\n\n");
+       return 0;
+      default:
+         printf("\t\t잘못된 값을 입력하셨습니다. 다시 입력 하세요. \n");
+      }
+   }
+}
+void print(){
+   printf("\t\t=========================================================================\n\n");
+   printf("\t\t                      1.    선수단 조회\n");
+   printf("\t\t                      2.     경기 진행\n");
+   printf("\t\t                      3.    이달의 선수 \n");
+   printf("\t\t                      4.   잔여계약 조회 \n");
+   printf("\t\t                      5.   선수 치료 조회\n");
+   printf("\t\t                      6.   경기 결과 조회\n");
+   printf("\t\t                      7.       종료\n\n");
+   printf("\t\t=========================================================================\n\n");
+}
+void player_view(){
+   EXEC SQL BEGIN DECLARE SECTION;
+      char playername[15];
+      char position[15];
+      int part;
+      int goal;
+      int tackle;
+      int pass;
+   EXEC SQL END DECLARE SECTION;
+   
+   EXEC SQL DECLARE C1 CURSOR FOR
+      select PLAYER_NAME, POSITION, PARTICIPATION, GOAL, TACKLE, PASS
+      from player;
+
+   EXEC SQL OPEN C1;
+   printf("\t\t이름 \t\t 포지션 \t\t 출전 \t 득점 \t 태클 \t 패스성공 \n");
+   EXEC SQL WHENEVER NOT FOUND DO break; 
+   for(;;){
+      EXEC SQL FETCH C1 INTO :playername, :position, :part, :goal, :tackle, :pass;
+      printf("\t\t%s \t %s \t %d \t %d \t %d \t %d \n", playername, position, part, goal, tackle, pass);
+      }
+   EXEC SQL CLOSE C1;
+   printf("\n");
+   printf("\t\t===============================선수단 조회===============================\n\n");
+}
+void update_match(){
+   EXEC SQL BEGIN DECLARE SECTION;
+      int goal_p;
+      int tackle_p;
+      int pass_p;
+      char player1[11][5] = { "K001", "K002", "K003", "K004", "K005",
+                     "K006", "K007", "K008", "K009", "K010", "K011" };
+      char temp_player[5];
+
+        int goal1[11] = { 0 };
+      int tackle1[11] = { 0 };
+      int pass1[11] = { 0 };
+
+      const int MAX_GOAL = 3;
+      const int MAX_TACKEL = 20;
+      const int MAX_PASS = 50;
+   
+      int goal_temp = 0;
+      int goal_temp_temp = 0;
+
+   EXEC SQL END DECLARE SECTION;
+      
+   srand(time(NULL));
+   match_count = match_count + 1;
+   printf("\t\t%d번째 경기 시작!\n", match_count);
+
+    for (int i = 0; i < 11; i++) {
+       if (goal_temp_temp < MAX_GOAL) {
+             goal1[i] = (rand() % 3 - goal_temp) + 1;
+             goal_temp += goal1[i];
+             goal_temp_temp += goal1[i];
+       }
+       tackle1[i] = (rand() % 20) + 1;
+       pass1[i] = (rand() % 50) + 1;
+    }
+    for (int i = 0; i < 11; i++) {
+       if (goal1[i] < 0) {
+          goal1[i] = 0;
+       }
+    }
+   printf("\t\t경기 종료\n");
+
+   printf("\n\t\t선수 코드\t골 수\t태클 수\t패스 수\n");
+   for(int j = 0; j < 11; j++) {
+      strcpy(temp_player, player1[j]);
+      goal_p = goal1[j];
+      tackle_p = tackle1[j];
+      pass_p = pass1[j];
+      printf("\t\t%s \t\t %d \t %d \t %d\n", temp_player, goal_p, tackle_p, pass_p);
+
+      EXEC SQL update PLAYER
+      set GOAL = GOAL + :goal_p,
+      TACKLE = TACKLE + :tackle_p,
+      PASS = PASS + :pass_p
+      where PLAYER_NUMBER = :temp_player;
+      EXEC SQL COMMIT WORK;
+   }
+   printf("\t\t경기 정보 업데이트\n");
+}
+
+void goal_rank(){
+   EXEC SQL BEGIN DECLARE SECTION;
+      int goal;
+      char player_name[30];
+   EXEC SQL END DECLARE SECTION;
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+    EXEC SQL select PLAYER_NAME ,GOAL into :player_name,:goal
+      from PLAYER
+      order by GOAL desc;
+
+   printf("\t\t시즌 득점왕 : %s          득점 수 : %d\n\n",player_name,goal);
+}
+
+void injury_print() {
+   EXEC SQL BEGIN DECLARE SECTION;
+      char player_name[20];
+      char doctor_name[15];
+      char treatment_name[15];
+      char treatment_date[15];
+   EXEC SQL END DECLARE SECTION;
+   
+   EXEC SQL DECLARE C3 CURSOR FOR
+      select m.doctor_name, p.player_name, t.treatment_name, t.treatment_date
+      from medical_team m, player p, treatment t
+      where m.doctor_number = t.doctor_number   
+      and p.player_number = t.player_number;
+
+   EXEC SQL OPEN C3;
+   printf("\t\t담당의사 \t\t 부상 선수 \t 부상 부위 \y 치료 날짜\n");
+   EXEC SQL WHENEVER NOT FOUND DO break;
+   for(;;){
+      EXEC SQL FETCH C3 INTO :doctor_name, :player_name, :treatment_name, :treatment_date;
+      printf("\t\t%s \t %s \t %s         %s\n",doctor_name, player_name, treatment_name, treatment_date);
+      }
+   EXEC SQL CLOSE C3;
+}
+
+void injury() {
+   // just print 11-------------------------------------------
+   EXEC SQL BEGIN DECLARE SECTION;
+      char p_code[10];
+      char d_code[10];
+      char injury_body[10];
+
+      char player_number[10];
+     char player_name[20];
+   EXEC SQL END DECLARE SECTION;
+   
+   EXEC SQL DECLARE C100 CURSOR FOR
+      select player_number, player_name
+      from player;
+
+   EXEC SQL OPEN C100;
+   printf("\t\t선수 코드 \t 선수 이름\n");
+   EXEC SQL WHENEVER NOT FOUND DO break; 
+   for(;;){
+      EXEC SQL FETCH C100 INTO :player_number, :player_name;
+      printf("\t\t%s \t %s\n",player_number, player_name);
+    }
+   EXEC SQL CLOSE C100;
+   // ---------------------------------------------------------
+   printf("\t\t부상당한 선수 코드 입력 : ");
+   scanf("\t\t%s", p_code);
+
+   // just print 22-------------------------------------------
+   EXEC SQL BEGIN DECLARE SECTION;
+    char doctor_number[10];
+     char doctor_name[20];
+   EXEC SQL END DECLARE SECTION;
+   
+   EXEC SQL DECLARE C200 CURSOR FOR
+      select doctor_number, doctor_name
+      from medical_team;
+
+   EXEC SQL OPEN C200;
+   printf("\t\t닥터 코드 \t 닥터 이름\n");
+   EXEC SQL WHENEVER NOT FOUND DO break; 
+   for(;;){
+      EXEC SQL FETCH C200 INTO :doctor_number, :doctor_name;
+      printf("\t\t%s \t %s\n",doctor_number, doctor_name);
+    }
+   EXEC SQL CLOSE C200;
+   // ---------------------------------------------------------
+   printf("\t\t치료 담당의사 코드 입력 : ");
+   scanf("\t\t%s", d_code);
+
+   printf("\t\t부상 부위 입력 : ");
+   scanf("\t\t%s", injury_body);
+
+   printf("\t\t%s, %s, %s\n", p_code, d_code, injury_body);
+   
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+   EXEC SQL insert into treatment (doctor_number, player_number, treatment_name, treatment_date) values (:d_code, :p_code, :injury_body, sysdate);
+   printf("\t\tinsert success!!\n");
+   EXEC SQL COMMIT WORK;
+
+}
+void injury_delete(){
+   EXEC SQL BEGIN DECLARE SECTION;
+     char doctor_number[15];
+      char player_name[15];
+      char doctor_name[10];
+      char treatment_name[10];
+      char treatment_date[10];
+
+     char d_code[10];
+   EXEC SQL END DECLARE SECTION;
+   
+   EXEC SQL DECLARE C7 CURSOR FOR
+      select m.doctor_number, m.doctor_name, p.player_name, t.treatment_name, t.treatment_date
+      from medical_team m, player p, treatment t
+      where m.doctor_number = t.doctor_number   
+      and p.player_number = t.player_number;
+
+   EXEC SQL OPEN C7;
+   printf("\t\t의사번호 \t 담당의사 \t 부상 선수 \t 부상 부위 \t 치료 날짜\n");
+   EXEC SQL WHENEVER NOT FOUND DO break;
+   for(;;){
+      EXEC SQL FETCH C7 INTO :doctor_number, :doctor_name, :player_name, :treatment_name, :treatment_date;
+      printf("\t\t%s \t %s \t %s  %s  %s\n",doctor_number ,doctor_name, player_name, treatment_name, treatment_date);
+      }
+   EXEC SQL CLOSE C7;
+   //-------------------------------------
+   printf("\t\t부상 선수를 목록에서 삭제합니다.\n");
+   printf("\t\t치료 담당의사 코드 입력 : ");
+   scanf("\t\t%s", d_code);
+
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+   EXEC SQL delete from treatment doctor_number where doctor_number = :d_code;
+   printf("\t\tdelete success!!\n");
+   EXEC SQL COMMIT WORK;
+}
+
+void treatment_print() {
+   printf("\t\t=========================================================================\n\n");
+   printf("\t\t                      1.    부상 선수 조회\n");
+   printf("\t\t                      2.  부상 선수 정보 입력\n");
+   printf("\t\t                      3.  부상 선수 목록 삭제 \n");
+   printf("\t\t                      4.       종료\n\n");
+   printf("\t\t=========================================================================\n\n");
+
+   int flag = 0;
+   scanf("\t\t%d", &flag);
+
+   switch (flag){
+      case 1:
+         printf("\t\t==============================부상 선수 조회=============================\n\n");
+         injury_print();
+         break;
+      case 2:
+         printf("\t\t============================부상 선수 정보 입력==========================\n\n");
+         injury();
+         break;
+     case 3:
+       printf("\t\t============================부상 선수 목록 삭제==========================\n\n");
+         injury_delete();
+         break;
+      case 4:
+         printf("\t\t종료 합니다.\n");
+         return 0;
+      default:
+         printf("\t\t잘못된 값을 입력하셨습니다. 다시 입력 하세요. \n");
+      }
+}
+void player_time(){
+   EXEC SQL BEGIN DECLARE SECTION;
+      char playername[20];
+     char position[20];
+      int number;
+      char searchname[20];
+   EXEC SQL END DECLARE SECTION;
+   
+   EXEC SQL DECLARE C5 CURSOR FOR
+      select PLAYER_NAME, POSITION
+      from player;
+
+   EXEC SQL OPEN C5;
+   printf("\t\t\t\t 이름 \t\t\t  포지션 \n\n");
+   EXEC SQL WHENEVER NOT FOUND DO break; 
+   for(;;){
+      EXEC SQL FETCH C5 INTO :playername, :position;
+      printf("\t\t\t\t%s \t %s \n", playername, position);
+      }
+   EXEC SQL CLOSE C5;
+
+   printf("\t\t\t잔여계약기간이 알고 싶은 선수 이름을 입력해주세요 : ");
+   getchar();
+   scanf("\t\t\t%s",&searchname);
+
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+
+   EXEC SQL select player.player_name,MONTHS_BETWEEN(end_contract,SYSDATE) into :playername,:number
+      from contractor,player
+      where player.player_number = contractor.employee_number and player.player_name = :searchname;
+
+     printf("\n\t\t\t선수이름 : %s  \t  잔여계약 : %d개월\n\n",playername,number);
+
+}
+void match(){
+   EXEC SQL BEGIN DECLARE SECTION;
+      char match_num[10];
+      char home_t[10];
+      char away_t[10];
+      int home_g;
+      int away_g;
+
+      char m_code[10];
+      char h_code[10];
+      char a_code[10];
+      int hg_code;
+      int ag_code;
+   EXEC SQL END DECLARE SECTION;
+      printf("\t\t============================진행된 경기 정보=============================\n\n");
+      printf("\t\t매치번호 \t 홈팀 \t\t 스코어 \t  어웨이팀 \n");
+
+   EXEC SQL DECLARE C22 CURSOR FOR
+      select match_number, home_team, home_goal, away_goal, away_team
+      from match;
+   EXEC SQL OPEN C22;
+      
+   EXEC SQL WHENEVER NOT FOUND DO break; 
+   for(;;){
+      EXEC SQL FETCH C22 INTO :match_num, :home_t, :home_g, :away_g, :away_t;
+      printf("\t\t%s \t %s \t %d : %d \t\t %s \n",match_num, home_t, home_g, away_g, away_t);
+   }
+   EXEC SQL CLOSE C22;
+   // ---------------------------------------------------------
+   printf("\t\t경기 결과를 기록합니다...\n");
+   printf("\t\t매치번호를 입력하세요 : ");
+   scanf("\t\t%s", m_code);
+   printf("\n");
+   printf("\t\t구단번호를 입력하세요 : ");
+   scanf("\t\t%s", h_code);
+   printf("\n");
+   printf("\t\t구단 득점 수를 입력하세요 : ");
+   scanf("\t\t%d", &hg_code);
+   printf("\n");
+   printf("\t\t상대팀 구단번호를 입력하세요 : ");
+   scanf("\t\t%s", a_code);
+   printf("\n");
+   printf("\t\t상대팀 구단 득점 수를 입력하세요 : ");
+   scanf("\t\t%d", &ag_code);
+   printf("\n");
+
+   EXEC SQL WHENEVER NOT FOUND CONTINUE;
+   EXEC SQL insert into match (match_number, match_date, home_team, away_team, home_goal, away_goal)
+   values (:m_code, sysdate, :h_code, :a_code, :hg_code, :ag_code);
+   printf("\t\t경기결과가 반영되었습니다.\n");
+   EXEC SQL COMMIT WORK;
+}
+void match_result_view(){
+   EXEC SQL BEGIN DECLARE SECTION;
+      char match_num[10];
+      char home_t[10];
+      char away_t[10];
+      char match_d[15];
+      int home_g;
+      int away_g;
+
+   EXEC SQL END DECLARE SECTION;
+   printf("\t\t============================진행된 경기 정보=============================\n\n");
+   printf("\t\t매치번호 \t 홈팀 \t\t 스코어 \t 어웨이팀 \t 경기 날짜 \n");
+
+   EXEC SQL DECLARE C23 CURSOR FOR
+      select match_number, home_team, home_goal, away_goal, away_team, match_date
+      from match;
+   EXEC SQL OPEN C23;
+      
+   EXEC SQL WHENEVER NOT FOUND DO break; 
+   for(;;){
+      EXEC SQL FETCH C23 INTO :match_num, :home_t, :home_g, :away_g, :away_t, :match_d;
+      printf("\t\t%s \t %s \t %d : %d \t\t %s \t %s \n",match_num, home_t, home_g, away_g, away_t, match_d);
+   }
+   EXEC SQL CLOSE C23;
+}
+void match_view(){
+   printf("\t\t=========================================================================\n\n");
+   printf("\t\t                      1.   경기결과 조회\n");
+   printf("\t\t                      2.   경기결과 반영\n");
+   printf("\t\t                      3.       종료\n\n");
+   printf("\t\t=========================================================================\n\n");
+
+   int flag = 0;
+   scanf("\t\t%d", &flag);
+
+   switch (flag){
+      case 1:
+         printf("\t\t==============================경기결과 조회===============================\n\n");
+         match_result_view();
+         break;
+      case 2:
+         printf("\t\t==============================경기결과 입력===============================\n\n");
+         match();
+         break;
+      case 3:
+         printf("\t\t종료 합니다.\n");
+         return 0;
+      default:
+         printf("\t\t잘못된 값을 입력하셨습니다. 다시 입력 하세요. \n");
+      }
+}
+
+void DB_connect() {
+   strcpy((char *)uid.arr, "zstB2@//sedb.deu.ac.kr:1521/orcl");
+   uid.len = (short) strlen((char *)uid.arr);
+   strcpy((char *)pwd.arr, "sinlee2");
+   pwd.len = (short) strlen((char *)pwd.arr);
+   
+   EXEC SQL CONNECT :uid IDENTIFIED BY :pwd;
+
+   if(sqlca.sqlcode != 0 && sqlca.sqlcode != -1405) { //connect
+      printf("\7Connect error: %s ",sqlca.sqlerrm.sqlerrmc);
+      getch(); 
+      exit(-1);
+   }
+   printf("Oracle Connect SUCCESS by %s\n", uid.arr);
+}
+
+void sql_error(char *msg) {
+   char err_msg[128];      size_t buf_len, msg_len;
+   EXEC SQL WHENEVER SQLERROR CONTINUE;
+   printf("\n%s\n",msg);      
+   buf_len = sizeof(err_msg);
+   sqlglm(err_msg, &buf_len, &msg_len);   
+   printf("%.*s\n",msg_len,err_msg);
+   getch();
+   EXEC SQL ROLLBACK WORK;
+   exit(-1);
+}
